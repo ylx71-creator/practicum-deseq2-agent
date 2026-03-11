@@ -2,8 +2,6 @@
 
 RNA-seq differential expression analysis pipeline using **DESeq2**, exposed through a **FastAPI API service** and designed for future integration into an **agentic AI workflow**.
 
-This project builds a modular pipeline for omics analysis and wraps the workflow into an API that can be called by automated agents.
-
 ---
 
 # Project Overview
@@ -14,8 +12,6 @@ This repository implements an RNA-seq analysis pipeline that:
 - performs differential expression analysis using **PyDESeq2**  
 - converts gene IDs to gene symbols  
 - exposes the pipeline as a **REST API**
-
-This project represents the **first stage of an agentic AI system for automated omics analysis.**
 
 ---
 
