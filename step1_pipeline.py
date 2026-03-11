@@ -5,8 +5,13 @@ import pandas as pd
 from pydeseq2.dds import DeseqDataSet
 from pydeseq2.ds import DeseqStats
 
-def run_pipeline(base: Path, thr=20.0, padj=0.05, lfc=1.0) -> dict:
-    data, out = base/"data", base/"output"
+def run_pipeline(
+    base_dir: Path,
+    threshold: float = 20.0,
+    padj_cutoff: float = 0.05,
+    lfc_cutoff: float = 1.0,
+) -> dict:
+    data, out = base_dir/"data", base_dir/"output"
     out.mkdir(exist_ok=True)
     series = (data/"GSE164641_series_matrix.txt").read_text(encoding="utf-8", errors="ignore").splitlines()
 
@@ -15,7 +20,7 @@ def run_pipeline(base: Path, thr=20.0, padj=0.05, lfc=1.0) -> dict:
     risk = [float(x) for x in re.findall(r"(\d+\.\d+)%", risk_line)]
     n = min(len(gsm), len(risk))
     clin = pd.DataFrame({"sample_id": gsm[:n], "score": risk[:n]})
-    clin["target"] = np.where(clin["score"] >= thr, "High", "Average")
+    clin["target"] = np.where(clin["score"] >= threshold, "High", "Average")
 
     cnt = pd.read_csv(data/"GSE164641_raw_counts_GRCh38.p13_NCBI.tsv", sep="\t").set_index("GeneID").T
     cnt.index.name = "sample_id"; cnt = cnt.reset_index(); cnt.columns = cnt.columns.map(str)
@@ -41,7 +46,7 @@ def run_pipeline(base: Path, thr=20.0, padj=0.05, lfc=1.0) -> dict:
     res.to_csv(out/"deseq2_statistical_results.csv")
 
     sig = res.dropna(subset=["padj","log2FoldChange"])
-    sig = sig[(sig["padj"] < padj) & (sig["log2FoldChange"].abs() > lfc)].copy()
+    sig = sig[(sig["padj"] < padj_cutoff) & (sig["log2FoldChange"].abs() > lfc_cutoff)].copy()
     sig.insert(0, "gene_symbol", sig.index.map(lambda gid: gene_map.get(str(gid), "NA")))
     sig.to_csv(out/"deseq2_significant_genes.csv")
 
