@@ -19,7 +19,7 @@ This repository implements an RNA-seq analysis pipeline that:
 
 Current workflow:
 
-User / Agent  
+User  
 ↓  
 FastAPI API (api_app.py)  
 ↓  
@@ -27,7 +27,6 @@ DESeq2 Analysis Pipeline (step1_pipeline.py)
 ↓  
 Differential Expression Results  
 
-The pipeline is exposed through an API endpoint so that it can be integrated into automated workflows.
 
 ---
 
