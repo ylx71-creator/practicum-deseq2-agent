@@ -10,7 +10,7 @@ from sklearn.decomposition import PCA
 # =========================
 # Paths
 # =========================
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 OUT_DIR = BASE_DIR / "output"
 FIG_DIR = BASE_DIR / "figures"
 FIG_DIR.mkdir(exist_ok=True)
