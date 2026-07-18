@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 import pandas as pd
@@ -12,6 +13,8 @@ RECOGNIZED_GENES_OUT = OUTPUT_DIR / "gprofiler_recognized_genes.csv"
 UNRECOGNIZED_GENES_OUT = OUTPUT_DIR / "gprofiler_unrecognized_genes.csv"
 GO_BP_OUT = OUTPUT_DIR / "gprofiler_GO_BP_results.csv"
 ALL_SOURCES_OUT = OUTPUT_DIR / "gprofiler_all_sources_results.csv"
+GO_BP_MAPPING_OUT = OUTPUT_DIR / "gprofiler_GO_BP_gene_mapping.csv"
+ALL_SOURCES_MAPPING_OUT = OUTPUT_DIR / "gprofiler_all_sources_gene_mapping.csv"
 
 
 def load_clean_gene_list(input_file: Path) -> list[str]:
@@ -47,7 +50,68 @@ def load_clean_gene_list(input_file: Path) -> list[str]:
     return clean_genes
 
 
-def run_enrichment(gp, genes: list[str], sources: list[str], output_file: Path, description: str) -> pd.DataFrame:
+def parse_intersection(value) -> list[str]:
+    if isinstance(value, list):
+        genes = value
+    elif pd.isna(value):
+        genes = []
+    else:
+        text = str(value).strip()
+        if not text:
+            genes = []
+        elif text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = ast.literal_eval(text)
+                genes = parsed if isinstance(parsed, list) else [parsed]
+            except (SyntaxError, ValueError):
+                genes = text.split(",")
+        else:
+            genes = text.split(",")
+
+    return [str(gene).strip().strip("'\"") for gene in genes if str(gene).strip().strip("'\"")]
+
+
+def save_gene_mapping(results: pd.DataFrame, output_file: Path) -> pd.DataFrame:
+    required_columns = {"source", "native", "name", "intersection"}
+    missing_columns = required_columns - set(results.columns)
+    if missing_columns:
+        raise ValueError(
+            "Cannot create gene-pathway mapping. "
+            f"Missing required columns: {sorted(missing_columns)}"
+        )
+
+    rows = []
+    for _, row in results.iterrows():
+        for gene in parse_intersection(row["intersection"]):
+            rows.append(
+                {
+                    "source": row["source"],
+                    "native": row["native"],
+                    "pathway_name": row["name"],
+                    "gene_symbol": gene,
+                }
+            )
+
+    mapping = pd.DataFrame(rows, columns=["source", "native", "pathway_name", "gene_symbol"])
+    mapping = mapping.drop_duplicates(subset=["source", "native", "gene_symbol"])
+    mapping.to_csv(output_file, index=False)
+
+    print(f"Saved gene-pathway mapping to: {output_file}")
+    print(f"Gene-pathway pairs saved: {len(mapping)}")
+    print(f"Unique genes in mapping: {mapping['gene_symbol'].nunique() if not mapping.empty else 0}")
+    print(f"Unique pathways in mapping: {mapping[['source', 'native']].drop_duplicates().shape[0] if not mapping.empty else 0}")
+
+    return mapping
+
+
+def run_enrichment(
+    gp,
+    genes: list[str],
+    sources: list[str],
+    output_file: Path,
+    mapping_output_file: Path,
+    description: str,
+) -> pd.DataFrame:
     print()
     print(f"Running g:Profiler enrichment analysis: {description}")
     print(f"Sources: {sources}")
@@ -56,11 +120,19 @@ def run_enrichment(gp, genes: list[str], sources: list[str], output_file: Path, 
         organism="hsapiens",
         query=genes,
         sources=sources,
+        no_evidences=False,
     )
+
+    if "intersections" not in results.columns:
+        raise ValueError("g:Profiler results are missing the expected 'intersections' column.")
+    results["intersection"] = results["intersections"]
 
     results.to_csv(output_file, index=False)
     print(f"Saved results to: {output_file}")
     print(f"Number of enriched terms/pathways returned: {len(results)}")
+    print("The term-level results include the 'intersection' column with matched input genes.")
+
+    save_gene_mapping(results, mapping_output_file)
     return results
 
 
@@ -131,6 +203,7 @@ def main() -> None:
         genes=genes,
         sources=["GO:BP"],
         output_file=GO_BP_OUT,
+        mapping_output_file=GO_BP_MAPPING_OUT,
         description="Version A - GO Biological Process only",
     )
 
@@ -139,6 +212,7 @@ def main() -> None:
         genes=genes,
         sources=["GO:BP", "GO:MF", "GO:CC", "KEGG", "REAC"],
         output_file=ALL_SOURCES_OUT,
+        mapping_output_file=ALL_SOURCES_MAPPING_OUT,
         description=(
             "Version B - GO Biological Process, Molecular Function, Cellular Component, "
             "KEGG pathways, and Reactome pathways"
